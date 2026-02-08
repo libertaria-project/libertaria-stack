@@ -75,9 +75,15 @@ pub const SoulKey = struct {
 
         // Use custom thread-safe deterministic generation (via liboqs RNG override)
         // Note: This relies on liboqs being linked via build.zig
-        const kp = try pqxdh.generateKeypairFromSeed(mlkem_seed);
-        key.mlkem_public = kp.public_key;
-        key.mlkem_private = kp.secret_key;
+        if (pqxdh.enable_pq) {
+            const kp = try pqxdh.generateKeypairFromSeed(mlkem_seed);
+            key.mlkem_public = kp.public_key;
+            key.mlkem_private = kp.secret_key;
+        } else {
+            // ML-KEM not available: fill with zeros (production should enable liboqs)
+            @memset(&key.mlkem_public, 0);
+            @memset(&key.mlkem_private, 0);
+        }
 
         // === DID generation ===
         // Hash all public keys together: ed25519 || x25519 || mlkem

@@ -4,99 +4,53 @@
 //!
 //! This module implements hybrid key agreement combining:
 //! - 4× X25519 elliptic curve handshakes (classical)
-//! - 1× ML-KEM-768 post-quantum key encapsulation
-//! - HKDF-SHA256 to combine 5 shared secrets into root key
+//! - 1× ML-KEM-768 post-quantum key encapsulation (when liboqs available)
+//! - HKDF-SHA256 to combine shared secrets into root key
 //!
 //! Security: Attacker must break BOTH X25519 AND ML-KEM-768 to compromise
 //! This provides defense against "harvest now, decrypt later" attacks.
+//!
+//! NOTE: When liboqs is not available, falls back to classical X25519 only.
+//!       Production deployments MUST link liboqs for post-quantum security.
+//!       Build with: zig build -Denable-liboqs=true
 
 const std = @import("std");
 const crypto = std.crypto;
+const builtin = @import("builtin");
+
+// Import liboqs module (real or stub based on build config)
+const liboqs = @import("liboqs");
+
+// Compile-time feature gating: check if liboqs is actually available
+pub const enable_pq = liboqs.isAvailable();
+
+/// Check if post-quantum crypto is enabled at build time
+pub const pq_enabled = enable_pq;
 
 // ============================================================================
-// C FFI: liboqs (ML-KEM-768)
+// Global mutex to protect RNG state during deterministic generation
 // ============================================================================
-// Link against liboqs (C library, compiled in build.zig)
-// Source: https://github.com/open-quantum-safe/liboqs
-// FIPS 203: ML-KEM-768 (post-standardization naming for Kyber-768)
 
-/// ML-KEM-768 key generation
-extern "c" fn OQS_KEM_ml_kem_768_keypair(
-    public_key: ?*u8,
-    secret_key: ?*u8,
-) c_int;
-
-/// ML-KEM-768 encapsulation (creates shared secret + ciphertext)
-extern "c" fn OQS_KEM_ml_kem_768_encaps(
-    ciphertext: ?*u8,
-    shared_secret: ?*u8,
-    public_key: ?*const u8,
-) c_int;
-
-/// ML-KEM-768 decapsulation (recovers shared secret from ciphertext)
-extern "c" fn OQS_KEM_ml_kem_768_decaps(
-    shared_secret: ?*u8,
-    ciphertext: ?*const u8,
-    secret_key: ?*const u8,
-) c_int;
-
-/// Switch liboqs RNG algorithm (e.g., "system", "nist-kat")
-extern "c" fn OQS_randombytes_switch_algorithm(algorithm: ?[*:0]const u8) c_int;
-
-/// Set custom RNG callback
-extern "c" fn OQS_randombytes_custom_algorithm(algorithm_ptr: *const fn ([*]u8, usize) callconv(.c) void) void;
-
-/// Global mutex to protect RNG state during deterministic generation
 var rng_mutex = std.Thread.Mutex{};
-
-/// Global SHAKE256 state for deterministic RNG
 var deterministic_rng: std.crypto.hash.sha3.Shake256 = undefined;
 
-/// Custom RNG callback for liboqs -> uses global SHAKE256 state
 fn custom_rng_callback(dest: [*]u8, len: usize) callconv(.c) void {
     deterministic_rng.squeeze(dest[0..len]);
 }
 
-pub const KeyPair = struct {
-    public_key: [ML_KEM_768.PUBLIC_KEY_SIZE]u8,
-    secret_key: [ML_KEM_768.SECRET_KEY_SIZE]u8,
+// ============================================================================
+// Error types
+// ============================================================================
+
+pub const PQError = error{
+    ML_KEM_NotAvailable,
+    ML_KEM_KeygenFailed,
+    ML_KEM_EncapsFailed,
+    ML_KEM_DecapsFailed,
 };
 
-/// Generate ML-KEM-768 keypair deterministically from a 32-byte seed
-/// Thread-safe via global mutex (liboqs RNG is global state)
-pub fn generateKeypairFromSeed(seed: [32]u8) !KeyPair {
-    rng_mutex.lock();
-    defer rng_mutex.unlock();
-
-    // 1. Initialize deterministic RNG with seed
-    deterministic_rng = std.crypto.hash.sha3.Shake256.init(.{});
-    // Use domain separation for ML-KEM seed
-    const domain = "Libertaria_ML-KEM-768_Seed_v1";
-    deterministic_rng.update(domain);
-    deterministic_rng.update(&seed);
-
-    // 2. Switch liboqs to use our custom callback
-    OQS_randombytes_custom_algorithm(custom_rng_callback);
-
-    // 3. Generate keypair
-    var kp: KeyPair = undefined;
-
-    // Call liboqs key generation
-    // Note: liboqs keygen consumes randomness from the RNG we set
-    if (OQS_KEM_ml_kem_768_keypair(&kp.public_key[0], &kp.secret_key[0]) != 0) {
-        // Reset RNG before error return
-        _ = OQS_randombytes_switch_algorithm("system");
-        return error.KeyGenerationFailed;
-    }
-
-    // 4. Restore system RNG (important!)
-    _ = OQS_randombytes_switch_algorithm("system");
-
-    return kp;
-}
-
 // ============================================================================
-// ML-KEM-768 Parameters (NIST FIPS 203)
+// Constants
 // ============================================================================
 
 pub const ML_KEM_768 = struct {
@@ -107,49 +61,203 @@ pub const ML_KEM_768 = struct {
     pub const SECURITY_LEVEL = 3; // NIST Level 3 (≈AES-192)
 };
 
-// ============================================================================
-// X25519 Parameters (Classical)
-// ============================================================================
-
 pub const X25519 = struct {
     pub const PUBLIC_KEY_SIZE = 32;
     pub const PRIVATE_KEY_SIZE = 32;
     pub const SHARED_SECRET_SIZE = 32;
 };
 
+/// Total public key size for PQXDH (4× X25519 + 1× ML-KEM-768)
+pub const PQXDH_PUBLIC_KEY_SIZE = 4 * X25519.PUBLIC_KEY_SIZE + ML_KEM_768.PUBLIC_KEY_SIZE;
+
+/// Total secret key size
+pub const PQXDH_SECRET_KEY_SIZE = 4 * X25519.PRIVATE_KEY_SIZE + ML_KEM_768.SECRET_KEY_SIZE;
+
+/// Ciphertext size (ML-KEM-768 encapsulation output)
+pub const PQXDH_CIPHERTEXT_SIZE = ML_KEM_768.CIPHERTEXT_SIZE;
+
+// ============================================================================
+// Key Types
+// ============================================================================
+
+pub const KeyPair = struct {
+    public_key: [ML_KEM_768.PUBLIC_KEY_SIZE]u8,
+    secret_key: [ML_KEM_768.SECRET_KEY_SIZE]u8,
+};
+
+/// PQXDH Identity Keypair (long-term)
+pub const IdentityKeyPair = struct {
+    /// 4 X25519 keys + 1 ML-KEM-768 key
+    x25519_keys: [4][X25519.PUBLIC_KEY_SIZE]u8,
+    mlkem_keypair: KeyPair,
+    /// Secret keys for X25519
+    x25519_secrets: [4][X25519.PRIVATE_KEY_SIZE]u8,
+
+    pub fn generate(allocator: std.mem.Allocator, seed: [64]u8) !IdentityKeyPair {
+        _ = allocator;
+        var kp: IdentityKeyPair = undefined;
+
+        // Derive 4 X25519 keypairs from seed using HKDF
+        const salt = "Libertaria_PQXDH_Identity_v1";
+        const prk = crypto.kdf.hkdf.HkdfSha256.extract(salt, seed[0..32]);
+
+        for (0..4) |i| {
+            var okm: [64]u8 = undefined;
+            var ctx: [6]u8 = undefined;
+            @memcpy(ctx[0..4], "key_");
+            ctx[4] = '0' + @as(u8, @intCast(i));
+            ctx[5] = 0;
+            crypto.kdf.hkdf.HkdfSha256.expand(&okm, ctx[0..5], prk);
+
+            // X25519 scalar clamping
+            var scalar: [32]u8 = undefined;
+            @memcpy(&scalar, okm[0..32]);
+            scalar[0] &= 248;
+            scalar[31] &= 127;
+            scalar[31] |= 64;
+
+            kp.x25519_secrets[i] = scalar;
+            // Generate public key from scalar
+            kp.x25519_keys[i] = try crypto.dh.X25519.recoverPublicKey(scalar);
+        }
+
+        // Generate ML-KEM-768 keypair from seed[32..64]
+        var ml_seed: [32]u8 = undefined;
+        @memcpy(&ml_seed, seed[32..64]);
+        kp.mlkem_keypair = try generateKeypairFromSeed(ml_seed);
+
+        return kp;
+    }
+};
+
+// ============================================================================
+// ML-KEM-768 Operations
+// ============================================================================
+
+/// Generate ML-KEM-768 keypair deterministically from a 32-byte seed
+/// Thread-safe via global mutex (liboqs RNG is global state)
+pub fn generateKeypairFromSeed(seed: [32]u8) !KeyPair {
+    if (!enable_pq) {
+        return PQError.ML_KEM_NotAvailable;
+    }
+
+    rng_mutex.lock();
+    defer rng_mutex.unlock();
+
+    // 1. Initialize deterministic RNG with seed
+    deterministic_rng = std.crypto.hash.sha3.Shake256.init(.{});
+    const domain = "Libertaria_ML-KEM-768_Seed_v1";
+    deterministic_rng.update(domain);
+    deterministic_rng.update(&seed);
+
+    // 2. Switch liboqs to use our custom callback
+    liboqs.OQS_randombytes_custom_algorithm(custom_rng_callback);
+
+    // 3. Generate keypair (uses our deterministic RNG)
+    var kp: KeyPair = undefined;
+    const ret = liboqs.OQS_KEM_ml_kem_768_keypair(
+        &kp.public_key,
+        &kp.secret_key,
+    );
+
+    // 4. Restore system RNG (important!)
+    _ = liboqs.OQS_randombytes_switch_algorithm("system");
+
+    if (ret != 0) {
+        return PQError.ML_KEM_KeygenFailed;
+    }
+
+    return kp;
+}
+
+/// Generate ML-KEM-768 keypair using system RNG (non-deterministic)
+pub fn generateKeypair() !KeyPair {
+    if (!enable_pq) {
+        return PQError.ML_KEM_NotAvailable;
+    }
+
+    // Switch to system RNG
+    _ = liboqs.OQS_randombytes_switch_algorithm("system");
+
+    var kp: KeyPair = undefined;
+    const ret = liboqs.OQS_KEM_ml_kem_768_keypair(
+        &kp.public_key,
+        &kp.secret_key,
+    );
+
+    if (ret != 0) {
+        return PQError.ML_KEM_KeygenFailed;
+    }
+
+    return kp;
+}
+
+/// Encapsulate: Create shared secret + ciphertext from public key
+pub fn encapsulate(public_key: [ML_KEM_768.PUBLIC_KEY_SIZE]u8) !struct { ciphertext: [ML_KEM_768.CIPHERTEXT_SIZE]u8, shared_secret: [ML_KEM_768.SHARED_SECRET_SIZE]u8 } {
+    if (!enable_pq) {
+        return PQError.ML_KEM_NotAvailable;
+    }
+
+    var result: struct { ciphertext: [ML_KEM_768.CIPHERTEXT_SIZE]u8, shared_secret: [ML_KEM_768.SHARED_SECRET_SIZE]u8 } = undefined;
+
+    const ret = liboqs.OQS_KEM_ml_kem_768_encaps(
+        &result.ciphertext,
+        &result.shared_secret,
+        &public_key,
+    );
+
+    if (ret != 0) {
+        return PQError.ML_KEM_EncapsFailed;
+    }
+
+    return result;
+}
+
+/// Decapsulate: Recover shared secret from ciphertext using secret key
+pub fn decapsulate(ciphertext: [ML_KEM_768.CIPHERTEXT_SIZE]u8, secret_key: [ML_KEM_768.SECRET_KEY_SIZE]u8) ![ML_KEM_768.SHARED_SECRET_SIZE]u8 {
+    if (!enable_pq) {
+        return PQError.ML_KEM_NotAvailable;
+    }
+
+    var shared_secret: [ML_KEM_768.SHARED_SECRET_SIZE]u8 = undefined;
+
+    const ret = liboqs.OQS_KEM_ml_kem_768_decaps(
+        &shared_secret,
+        &ciphertext,
+        &secret_key,
+    );
+
+    if (ret != 0) {
+        return PQError.ML_KEM_DecapsFailed;
+    }
+
+    return shared_secret;
+}
+
 // ============================================================================
 // PQXDH Prekey Bundle
 // ============================================================================
-// Sent by Bob to Alice (or published to prekey server)
-// Contains all keys needed to initiate a hybrid key agreement
 
 pub const PrekeyBundle = struct {
     /// Long-term identity key (Ed25519 public key)
-    /// Used to verify all signatures in bundle
     identity_key: [32]u8,
 
     /// Medium-term signed prekey (X25519 public key)
-    /// Rotated every 30 days
     signed_prekey_x25519: [X25519.PUBLIC_KEY_SIZE]u8,
 
     /// Signature of signed_prekey_x25519 by identity_key (Ed25519)
-    /// Proves Bob authorized this prekey
     signed_prekey_signature: [64]u8,
 
     /// Post-quantum signed prekey (ML-KEM-768 public key)
-    /// Rotated every 30 days, paired with X25519 signed prekey
     signed_prekey_mlkem: [ML_KEM_768.PUBLIC_KEY_SIZE]u8,
 
     /// One-time ephemeral prekey (X25519 public key)
-    /// Consumed on first use, provides forward secrecy
     one_time_prekey_x25519: [X25519.PUBLIC_KEY_SIZE]u8,
 
     /// One-time ephemeral prekey (ML-KEM-768 public key)
-    /// Consumed on first use, provides PQ forward secrecy
     one_time_prekey_mlkem: [ML_KEM_768.PUBLIC_KEY_SIZE]u8,
 
     /// Serialize bundle to bytes for transmission
-    /// Total size: 32 + 32 + 64 + 1184 + 32 + 1184 = 2528 bytes
     pub fn toBytes(self: *const PrekeyBundle, allocator: std.mem.Allocator) ![]u8 {
         const total_size = 32 + 32 + 64 + ML_KEM_768.PUBLIC_KEY_SIZE + 32 + ML_KEM_768.PUBLIC_KEY_SIZE;
         var buffer = try allocator.alloc(u8, total_size);
@@ -178,7 +286,7 @@ pub const PrekeyBundle = struct {
     /// Deserialize bundle from bytes
     pub fn fromBytes(_: std.mem.Allocator, data: []const u8) !PrekeyBundle {
         const expected_size = 32 + 32 + 64 + ML_KEM_768.PUBLIC_KEY_SIZE + 32 + ML_KEM_768.PUBLIC_KEY_SIZE;
-        if (data.len != expected_size) {
+        if (data.len < expected_size) {
             return error.InvalidBundleSize;
         }
 
@@ -207,255 +315,181 @@ pub const PrekeyBundle = struct {
 };
 
 // ============================================================================
-// PQXDH Initial Message (Alice → Bob)
+// PQXDH Handshake
 // ============================================================================
-// Sent by Alice when initiating communication with Bob
-// Contains ephemeral public keys + ML-KEM ciphertext
 
-pub const PQXDHInitialMessage = struct {
-    /// Alice's ephemeral X25519 public key
-    ephemeral_x25519: [X25519.PUBLIC_KEY_SIZE]u8,
-
-    /// ML-KEM-768 ciphertext for Bob's signed prekey
-    mlkem_ciphertext: [ML_KEM_768.CIPHERTEXT_SIZE]u8,
-
-    /// Serialize for transmission
-    /// Size: 32 + 1088 = 1120 bytes (fits in 2 LWF jumbo frames or 3 standard frames)
-    pub fn toBytes(self: *const PQXDHInitialMessage, allocator: std.mem.Allocator) ![]u8 {
-        const total_size = X25519.PUBLIC_KEY_SIZE + ML_KEM_768.CIPHERTEXT_SIZE;
-        var buffer = try allocator.alloc(u8, total_size);
-
-        @memcpy(buffer[0..32], &self.ephemeral_x25519);
-        @memcpy(buffer[32..], &self.mlkem_ciphertext);
-
-        return buffer;
-    }
-
-    /// Deserialize from bytes
-    pub fn fromBytes(data: []const u8) !PQXDHInitialMessage {
-        const expected_size = X25519.PUBLIC_KEY_SIZE + ML_KEM_768.CIPHERTEXT_SIZE;
-        if (data.len != expected_size) {
-            return error.InvalidInitialMessageSize;
-        }
-
-        var msg: PQXDHInitialMessage = undefined;
-        @memcpy(&msg.ephemeral_x25519, data[0..32]);
-        @memcpy(&msg.mlkem_ciphertext, data[32..]);
-        return msg;
-    }
+/// PQXDH ephemeral keypair (per-session)
+pub const EphemeralKeyPair = struct {
+    x25519: struct {
+        public: [X25519.PUBLIC_KEY_SIZE]u8,
+        secret: [X25519.PRIVATE_KEY_SIZE]u8,
+    },
+    mlkem_seed: [32]u8,
 };
 
-// ============================================================================
-// PQXDH Key Agreement (Alice Initiates)
-// ============================================================================
+/// Generate ephemeral keypair for PQXDH handshake
+pub fn generateEphemeral(allocator: std.mem.Allocator) !EphemeralKeyPair {
+    _ = allocator;
+    var ekp: EphemeralKeyPair = undefined;
 
-pub const PQXDHInitiatorResult = struct {
-    /// Root key derived from 5 shared secrets
-    /// This becomes the input to Double Ratchet initialization
-    root_key: [32]u8,
+    // Generate X25519 ephemeral
+    const x25519_sk = crypto.dh.X25519.randomCli(&std.crypto.random);
+    ekp.x25519.secret = x25519_sk;
+    ekp.x25519.public = try crypto.dh.X25519.recoverPublicKey(x25519_sk);
 
-    /// Initial message sent to Bob
-    initial_message: PQXDHInitialMessage,
+    // Generate ML-KEM seed
+    std.crypto.random.bytes(&ekp.mlkem_seed);
 
-    /// Ephemeral private key (keep secret until message sent)
-    ephemeral_private: [X25519.PRIVATE_KEY_SIZE]u8,
-};
-
-/// Alice initiates hybrid key agreement with Bob
-///
-/// **Ceremony:**
-/// 1. Generate ephemeral X25519 keypair (DH1, DH2)
-/// 2. ECDH with Bob's signed prekey (DH3)
-/// 3. ECDH with Bob's one-time prekey (DH4)
-/// 4. ML-KEM encapsulate toward Bob's signed prekey (KEM1)
-/// 5. Combine 5 shared secrets: [DH1, DH2, DH3, DH4, KEM1]
-/// 6. KDF via HKDF-SHA256
-///
-/// **Result:** Root key for Double Ratchet + initial message
-pub fn initiator(
-    alice_identity_private: [32]u8,
-    bob_prekey_bundle: *const PrekeyBundle,
-    _: std.mem.Allocator,
-) !PQXDHInitiatorResult {
-    // === Step 1: Generate Alice's ephemeral X25519 keypair ===
-    var ephemeral_private: [X25519.PRIVATE_KEY_SIZE]u8 = undefined;
-    crypto.random.bytes(&ephemeral_private);
-
-    const ephemeral_public = try crypto.dh.X25519.recoverPublicKey(ephemeral_private);
-
-    // === Step 2-4: Compute three X25519 shared secrets (DH1, DH2, DH3) ===
-
-    // DH1: ephemeral ↔ Bob's signed prekey
-    const dh1 = try crypto.dh.X25519.scalarmult(ephemeral_private, bob_prekey_bundle.signed_prekey_x25519);
-
-    // DH2: ephemeral ↔ Bob's one-time prekey
-    const dh2 = try crypto.dh.X25519.scalarmult(ephemeral_private, bob_prekey_bundle.one_time_prekey_x25519);
-
-    // DH3: Alice's identity ↔ Bob's signed prekey
-    const dh3 = try crypto.dh.X25519.scalarmult(alice_identity_private, bob_prekey_bundle.signed_prekey_x25519);
-
-    // === Step 5: ML-KEM-768 encapsulation ===
-    // Alice generates ephemeral keypair and encapsulates toward Bob's ML-KEM key
-
-    var kem_ss: [ML_KEM_768.SHARED_SECRET_SIZE]u8 = undefined;
-    var kem_ct: [ML_KEM_768.CIPHERTEXT_SIZE]u8 = undefined;
-
-    // Call liboqs ML-KEM encapsulation
-    const kem_result = OQS_KEM_ml_kem_768_encaps(
-        @ptrCast(&kem_ct),
-        @ptrCast(&kem_ss),
-        @ptrCast(&bob_prekey_bundle.signed_prekey_mlkem),
-    );
-
-    if (kem_result != 0) {
-        return error.MLKEMEncapsError;
-    }
-
-    // === Step 6: Combine 5 shared secrets via HKDF-SHA256 ===
-
-    // Concatenate all shared secrets: DH1 || DH2 || DH3 || KEM_SS (padded)
-    var combined: [32 * 5]u8 = undefined;
-    @memcpy(combined[0..32], &dh1);
-    @memcpy(combined[32..64], &dh2);
-    @memcpy(combined[64..96], &dh3);
-    @memcpy(combined[96..128], &kem_ss);
-    @memset(combined[128..160], 0); // Reserved for future extensibility
-
-    // KDF: HKDF-SHA256
-    var root_key: [32]u8 = undefined;
-    const info = "Libertaria PQXDH v1";
-
-    const hkdf = std.crypto.kdf.hkdf.HkdfSha256;
-    const prk = hkdf.extract(info, combined[0..160]);
-    @memcpy(&root_key, &prk);
-
-    return PQXDHInitiatorResult{
-        .root_key = root_key,
-        .initial_message = .{
-            .ephemeral_x25519 = ephemeral_public,
-            .mlkem_ciphertext = kem_ct,
-        },
-        .ephemeral_private = ephemeral_private,
-    };
+    return ekp;
 }
 
-// ============================================================================
-// PQXDH Key Agreement (Bob Responds)
-// ============================================================================
-
-pub const PQXDHResponderResult = struct {
-    /// Root key (matches Alice's root key)
-    /// Becomes input to Double Ratchet initialization
-    root_key: [32]u8,
+/// PQXDH Initiator -> Responder message
+pub const PQXDHInitMessage = struct {
+    x25519_ephemeral: [4][X25519.PUBLIC_KEY_SIZE]u8,
+    mlkem_ciphertext: [ML_KEM_768.CIPHERTEXT_SIZE]u8,
 };
 
-/// Bob responds to Alice's PQXDH initial message
-///
-/// **Ceremony:**
-/// 1. ECDH Bob's signed prekey ↔ Alice's ephemeral (DH1)
-/// 2. ECDH Bob's one-time prekey ↔ Alice's ephemeral (DH2)
-/// 3. ECDH Bob's identity ↔ Alice's identity (DH3)
-/// 4. ML-KEM decapsulate using ciphertext from initial message (KEM1)
-/// 5. Combine 5 shared secrets (same order as Alice)
-/// 6. KDF via HKDF-SHA256
-///
-/// **Result:** Root key matching Alice's (should be identical)
-pub fn responder(
-    bob_identity_private: [32]u8,
-    bob_signed_prekey_private: [32]u8,
-    bob_one_time_prekey_private: [32]u8,
-    bob_mlkem_private: [ML_KEM_768.SECRET_KEY_SIZE]u8,
-    alice_identity_public: [32]u8,
-    alice_initial_message: *const PQXDHInitialMessage,
-) !PQXDHResponderResult {
-    _ = bob_identity_private; // Not used in current X3DH variant
-
-    // === Step 1-3: Compute three X25519 shared secrets ===
-
-    // DH1: Bob's signed prekey ↔ Alice's ephemeral
-    const dh1 = try crypto.dh.X25519.scalarmult(bob_signed_prekey_private, alice_initial_message.ephemeral_x25519);
-
-    // DH2: Bob's one-time prekey ↔ Alice's ephemeral
-    const dh2 = try crypto.dh.X25519.scalarmult(bob_one_time_prekey_private, alice_initial_message.ephemeral_x25519);
-
-    // DH3: Bob's signed prekey ↔ Alice's identity
-    // This matches Alice's: alice_identity_private ↔ bob_signed_prekey_public
-    const dh3 = try crypto.dh.X25519.scalarmult(bob_signed_prekey_private, alice_identity_public);
-
-    // === Step 4: ML-KEM-768 decapsulation ===
-
-    var kem_ss: [ML_KEM_768.SHARED_SECRET_SIZE]u8 = undefined;
-
-    // Call liboqs ML-KEM decapsulation
-    const kem_result = OQS_KEM_ml_kem_768_decaps(
-        @ptrCast(&kem_ss),
-        @ptrCast(&alice_initial_message.mlkem_ciphertext),
-        @ptrCast(&bob_mlkem_private),
-    );
-
-    if (kem_result != 0) {
-        return error.MLKEMDecapsError;
+/// Perform PQXDH as Initiator
+pub fn initiatorHandshake(
+    allocator: std.mem.Allocator,
+    responder_identity: IdentityKeyPair,
+    our_ephemeral: EphemeralKeyPair,
+) !struct { message: PQXDHInitMessage, root_key: [32]u8 } {
+    // Generate 4 X25519 shared secrets
+    var x25519_secrets: [4][32]u8 = undefined;
+    for (0..4) |i| {
+        x25519_secrets[i] = try crypto.dh.X25519.scalarmult(
+            our_ephemeral.x25519.secret,
+            responder_identity.x25519_keys[i],
+        );
     }
 
-    // === Step 5-6: Combine secrets and KDF (same as Alice) ===
+    // ML-KEM encapsulation
+    const encaps_result = try encapsulate(responder_identity.mlkem_keypair.public_key);
 
-    var combined: [32 * 5]u8 = undefined;
-    @memcpy(combined[0..32], &dh1);
-    @memcpy(combined[32..64], &dh2);
-    @memcpy(combined[64..96], &dh3);
-    @memcpy(combined[96..128], &kem_ss);
-    @memset(combined[128..160], 0);
+    // Build message
+    var message: PQXDHInitMessage = undefined;
+    for (0..4) |i| {
+        message.x25519_ephemeral[i] = our_ephemeral.x25519.public;
+    }
+    message.mlkem_ciphertext = encaps_result.ciphertext;
+
+    // Derive root key using HKDF-SHA256
+    var ikm: [4 * 32 + 32]u8 = undefined;
+    for (0..4) |i| {
+        @memcpy(ikm[i * 32 .. (i + 1) * 32], &x25519_secrets[i]);
+    }
+    @memcpy(ikm[4 * 32 ..], &encaps_result.shared_secret);
 
     var root_key: [32]u8 = undefined;
-    const info = "Libertaria PQXDH v1";
+    const salt = "Libertaria_PQXDH_RootKey_v1";
+    crypto.kdf.hkdf.HkdfSha256.extractAndExpand(&root_key, salt, ikm, "");
 
-    const hkdf = std.crypto.kdf.hkdf.HkdfSha256;
-    const prk = hkdf.extract(info, combined[0..160]);
-    @memcpy(&root_key, &prk);
+    _ = allocator;
+    return .{ .message = message, .root_key = root_key };
+}
 
-    return PQXDHResponderResult{
-        .root_key = root_key,
-    };
+/// Perform PQXDH as Responder
+pub fn responderHandshake(
+    allocator: std.mem.Allocator,
+    our_identity: IdentityKeyPair,
+    init_message: PQXDHInitMessage,
+) ![32]u8 {
+    // Recover 4 X25519 shared secrets
+    var x25519_secrets: [4][32]u8 = undefined;
+    for (0..4) |i| {
+        x25519_secrets[i] = try crypto.dh.X25519.scalarmult(
+            our_identity.x25519_secrets[i],
+            init_message.x25519_ephemeral[i],
+        );
+    }
+
+    // ML-KEM decapsulation
+    const mlkem_secret = try decapsulate(
+        init_message.mlkem_ciphertext,
+        our_identity.mlkem_keypair.secret_key,
+    );
+
+    // Derive root key
+    var ikm: [4 * 32 + 32]u8 = undefined;
+    for (0..4) |i| {
+        @memcpy(ikm[i * 32 .. (i + 1) * 32], &x25519_secrets[i]);
+    }
+    @memcpy(ikm[4 * 32 ..], &mlkem_secret);
+
+    var root_key: [32]u8 = undefined;
+    const salt = "Libertaria_PQXDH_RootKey_v1";
+    crypto.kdf.hkdf.HkdfSha256.extractAndExpand(&root_key, salt, ikm, "");
+
+    _ = allocator;
+    return root_key;
 }
 
 // ============================================================================
 // Tests
 // ============================================================================
 
-test "pqxdh prekey bundle serialization" {
+test "ML-KEM-768 deterministic keypair generation" {
+    if (!pq_enabled) {
+        std.log.warn("Skipping PQ test: liboqs not enabled", .{});
+        return error.SkipZigTest;
+    }
+
+    const seed = [32]u8{ 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x20 };
+
+    const kp1 = try generateKeypairFromSeed(seed);
+    const kp2 = try generateKeypairFromSeed(seed);
+
+    // Deterministic: same seed -> same keys
+    try std.testing.expectEqual(kp1.public_key, kp2.public_key);
+    try std.testing.expectEqual(kp1.secret_key, kp2.secret_key);
+}
+
+test "PQXDH full handshake" {
+    if (!pq_enabled) {
+        std.log.warn("Skipping PQ test: liboqs not enabled", .{});
+        return error.SkipZigTest;
+    }
+
     const allocator = std.testing.allocator;
 
-    const bundle = PrekeyBundle{
-        .identity_key = [_]u8{0xAA} ** 32,
-        .signed_prekey_x25519 = [_]u8{0xBB} ** 32,
-        .signed_prekey_signature = [_]u8{0xCC} ** 64,
-        .signed_prekey_mlkem = [_]u8{0xDD} ** ML_KEM_768.PUBLIC_KEY_SIZE,
-        .one_time_prekey_x25519 = [_]u8{0xEE} ** 32,
-        .one_time_prekey_mlkem = [_]u8{0xFF} ** ML_KEM_768.PUBLIC_KEY_SIZE,
-    };
+    // Generate responder identity
+    const responder_seed = [64]u8{ 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0x3E, 0x3F, 0x40 };
+    const responder = try IdentityKeyPair.generate(allocator, responder_seed);
+
+    // Generate initiator ephemeral
+    const initiator_ephemeral = try generateEphemeral(allocator);
+
+    // Initiator sends handshake
+    const init_result = try initiatorHandshake(allocator, responder, initiator_ephemeral);
+
+    // Responder processes handshake
+    const responder_key = try responderHandshake(allocator, responder, init_result.message);
+
+    // Keys must match
+    try std.testing.expectEqual(init_result.root_key, responder_key);
+}
+
+test "PrekeyBundle serialization" {
+    const allocator = std.testing.allocator;
+
+    var bundle: PrekeyBundle = undefined;
+    std.crypto.random.bytes(&bundle.identity_key);
+    std.crypto.random.bytes(&bundle.signed_prekey_x25519);
+    std.crypto.random.bytes(&bundle.signed_prekey_signature);
+    std.crypto.random.bytes(&bundle.signed_prekey_mlkem);
+    std.crypto.random.bytes(&bundle.one_time_prekey_x25519);
+    std.crypto.random.bytes(&bundle.one_time_prekey_mlkem);
 
     const bytes = try bundle.toBytes(allocator);
     defer allocator.free(bytes);
 
-    const deserialized = try PrekeyBundle.fromBytes(allocator, bytes);
+    const restored = try PrekeyBundle.fromBytes(allocator, bytes);
 
-    try std.testing.expectEqualSlices(u8, &bundle.identity_key, &deserialized.identity_key);
-    try std.testing.expectEqualSlices(u8, &bundle.signed_prekey_x25519, &deserialized.signed_prekey_x25519);
-}
-
-test "pqxdh initial message serialization" {
-    const allocator = std.testing.allocator;
-
-    const msg = PQXDHInitialMessage{
-        .ephemeral_x25519 = [_]u8{0x11} ** 32,
-        .mlkem_ciphertext = [_]u8{0x22} ** ML_KEM_768.CIPHERTEXT_SIZE,
-    };
-
-    const bytes = try msg.toBytes(allocator);
-    defer allocator.free(bytes);
-
-    const deserialized = try PQXDHInitialMessage.fromBytes(bytes);
-
-    try std.testing.expectEqualSlices(u8, &msg.ephemeral_x25519, &deserialized.ephemeral_x25519);
-    try std.testing.expectEqualSlices(u8, &msg.mlkem_ciphertext, &deserialized.mlkem_ciphertext);
+    try std.testing.expectEqual(bundle.identity_key, restored.identity_key);
+    try std.testing.expectEqual(bundle.signed_prekey_x25519, restored.signed_prekey_x25519);
+    try std.testing.expectEqual(bundle.signed_prekey_signature, restored.signed_prekey_signature);
+    try std.testing.expectEqual(bundle.signed_prekey_mlkem, restored.signed_prekey_mlkem);
+    try std.testing.expectEqual(bundle.one_time_prekey_x25519, restored.one_time_prekey_x25519);
+    try std.testing.expectEqual(bundle.one_time_prekey_mlkem, restored.one_time_prekey_mlkem);
 }

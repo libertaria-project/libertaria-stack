@@ -4,6 +4,21 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    // Build option: enable liboqs for post-quantum crypto
+    const enable_liboqs = b.option(bool, "enable-liboqs", "Enable post-quantum crypto via liboqs") orelse false;
+
+    // =======================================================================
+    // liboqs Module (Post-Quantum Crypto) - RFC-0830
+    // =======================================================================
+    const liboqs_mod = b.createModule(.{
+        .root_source_file = if (enable_liboqs) 
+            b.path("core/l1-identity/liboqs_real.zig") 
+        else 
+            b.path("core/l1-identity/liboqs_stub.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
     // Dependencies
     const vaxis_dep = b.dependency("vaxis", .{});
     const vaxis_mod = vaxis_dep.module("vaxis");
@@ -151,9 +166,12 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    l1_pqxdh_mod.addIncludePath(b.path("vendor/liboqs/install/include"));
-    l1_pqxdh_mod.addLibraryPath(b.path("vendor/liboqs/install/lib"));
-    l1_pqxdh_mod.linkSystemLibrary("oqs", .{ .needed = true });
+    l1_pqxdh_mod.addImport("liboqs", liboqs_mod);
+    if (enable_liboqs) {
+        l1_pqxdh_mod.addIncludePath(b.path("vendor/liboqs/install/include"));
+        l1_pqxdh_mod.addLibraryPath(b.path("vendor/liboqs/install/lib"));
+        l1_pqxdh_mod.linkSystemLibrary("oqs", .{ .needed = true });
+    }
 
     // Ensure l1_mod uses PQXDH
     l1_mod.addImport("pqxdh", l1_pqxdh_mod);
@@ -451,14 +469,18 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    l1_pqxdh_tests_mod.addImport("liboqs", liboqs_mod);
+    l1_pqxdh_tests_mod.addImport("pqxdh", l1_pqxdh_mod);
 
     const l1_pqxdh_tests = b.addTest(.{
         .root_module = l1_pqxdh_tests_mod,
     });
     l1_pqxdh_tests.linkLibC();
-    l1_pqxdh_tests.addIncludePath(b.path("vendor/liboqs/install/include"));
-    l1_pqxdh_tests.addLibraryPath(b.path("vendor/liboqs/install/lib"));
-    l1_pqxdh_tests.linkSystemLibrary("oqs");
+    if (enable_liboqs) {
+        l1_pqxdh_tests.addIncludePath(b.path("vendor/liboqs/install/include"));
+        l1_pqxdh_tests.addLibraryPath(b.path("vendor/liboqs/install/lib"));
+        l1_pqxdh_tests.linkSystemLibrary("oqs");
+    }
     const run_l1_pqxdh_tests = b.addRunArtifact(l1_pqxdh_tests);
 
     // L1 Vector tests (Phase 3C)
