@@ -1,0 +1,78 @@
+site_name: Libertaria Stack
+docs_dir: src
+site_dir: site
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/libertaria-project
+    - icon: fontawesome/brands/twitter
+      link: https://twitter.com/libertaria
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - admonition
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - attr_list
+  - md_in_html
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - getting-started/index.md
+    - getting-started/installation.md
+    - getting-started/first-node.md
+    - getting-started/concepts.md
+  - Architecture:
+    - architecture/index.md
+    - architecture/l0-transport.md
+    - architecture/l1-identity.md
+    - architecture/l2-session.md
+    - architecture/l3-governance.md
+    - architecture/l4-applications.md
+  - RFCs:
+    - rfcs/index.md
+    - rfcs/RFC-0140_Libertaria_SSI_Stack.md
+    - rfcs/RFC-0130_L4_Feed.md
+    - rfcs/RFC-0015_Transport_Skins.md
+    - rfcs/RFC-0014_Secure_Relay.md
+    - rfcs/RFC-0105_Sovereign_Time_Protocol.md
+
+plugins:
+  - search
+  - minify:
+      minify_html: true
