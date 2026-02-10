@@ -43,19 +43,18 @@ Aber wir können ein besseres Fundament legen.
 
 ## CLAUDE'S CRITICAL PATH (PRIORITIZED)
 
-### SPRINT 0: Holepunch-Lektionen — "Mobile First"
-**Duration:** 1 week (VOR Sprint 1)
-**Goal:** Neue RFCs spezifizieren basierend auf Holepunch/Keet Analyse
-**Referenz:** `docs/RFC_HOLEPUNCH_ADAPTATIONS.md`
+### SPRINT 0: Holepunch-Lektionen — WAITING FOR MARKUS
+**Status:** ⏸️ BLOCKED on Markus  
+**Deine Aufgabe:** RFC-0025 spezifizieren (Mobile Capsule Lifecycle)  
+**Meine Aufgabe (danach):** BDD + Implementation
 
-| Feature | BDD Spec | Status | Moltbook Check |
-|---------|----------|--------|----------------|
-| RFC-0025: Mobile Capsule Lifecycle | `specs/rfc-0025-draft.md` | ⏳ | Check m/mobile |
-| RFC-0000 Amendment: Version Negotiation | `specs/rfc-0000-amendment.md` | ⏳ | N/A |
-| RFC-0830 Amendment: MESSAGE tier Härtung | `specs/rfc-0830-amendment.md` | ⏳ | Check m/messaging |
+| Feature | BDD Spec | Status | Blocked By |
+|---------|----------|--------|------------|
+| RFC-0025: Mobile Capsule Lifecycle | WAITING | ⏸️ | Markus spec |
+| RFC-0000 Amendment: Version Negotiation | WAITING | ⏸️ | Markus spec |
+| RFC-0830 Amendment: MESSAGE tier | WAITING | ⏸️ | Markus spec |
 
-**Kritisch:** Ohne Mobile Lifecycle funktioniert Libertaria nicht auf Handys.
-Holepunch hat 4 Jahre hier investiert. Wir müssen das spezifizieren BEVOR wir implementieren.
+**Note:** Ich entwickle NICHT die RFCs. Ich warte auf deine Spezifikation, dann implementiere ich BDD + Code.
 
 ---
 
