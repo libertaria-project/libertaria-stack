@@ -12,7 +12,52 @@
 
 ---
 
+## SUBMARINE MVP ("EIN TORPEDO")
+
+**Ziel:** Holepunch/Keet-Äquivalent auf Libertaria Stack
+**Zeitrahmen:** 6 Wochen (statt 4)
+**Scope:** Reduziert auf das absolut Minimum
+
+### Enthalten (MVP):
+- ✅ L0: UTCP + MIMIC_HTTPS + OPQ (RFC-0020)
+- ✅ L0: Mobile Lifecycle (RFC-0025 - NEU)
+- ✅ L0: Version Negotiation (RFC-0000 Amendment)
+- ✅ L1: SoulKey (Ed25519)
+- ✅ L1: 1:1 DM mit relay (RFC-0830 MESSAGE tier)
+- ✅ L1: QVL (basic trust graph)
+
+### NICHT enthalten (post-MVP):
+- ❌ Feed (L4) - erst nach DM stabil
+- ❌ Monetary Controller (RFC-0648) - Payload
+- ❌ Chapter Governance (L3) - Payload
+- ❌ Vector search (L5) - zu groß für Kenya Rule
+- ❌ Slash Protocol vollständig - nur Detection, nicht Enforcement
+
+**Motivation:**
+> *"Ship the submarine with one torpedo tube. The armory comes later."*
+
+Holepunch hat 4 Jahre Vorsprung. Wir können nicht alles aufholen.
+Aber wir können ein besseres Fundament legen.
+
+---
+
 ## CLAUDE'S CRITICAL PATH (PRIORITIZED)
+
+### SPRINT 0: Holepunch-Lektionen — "Mobile First"
+**Duration:** 1 week (VOR Sprint 1)
+**Goal:** Neue RFCs spezifizieren basierend auf Holepunch/Keet Analyse
+**Referenz:** `docs/RFC_HOLEPUNCH_ADAPTATIONS.md`
+
+| Feature | BDD Spec | Status | Moltbook Check |
+|---------|----------|--------|----------------|
+| RFC-0025: Mobile Capsule Lifecycle | `specs/rfc-0025-draft.md` | ⏳ | Check m/mobile |
+| RFC-0000 Amendment: Version Negotiation | `specs/rfc-0000-amendment.md` | ⏳ | N/A |
+| RFC-0830 Amendment: MESSAGE tier Härtung | `specs/rfc-0830-amendment.md` | ⏳ | Check m/messaging |
+
+**Kritisch:** Ohne Mobile Lifecycle funktioniert Libertaria nicht auf Handys.
+Holepunch hat 4 Jahre hier investiert. Wir müssen das spezifizieren BEVOR wir implementieren.
+
+---
 
 ### SPRINT 1: L0 Transport — "The Packet Moves"
 **Duration:** 2 weeks
