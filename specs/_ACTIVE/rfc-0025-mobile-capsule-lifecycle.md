@@ -47,7 +47,7 @@ This RFC is **waiting for Markus' specification**.
 
 ## REFERENCE
 
-See: `docs/RFC_HOLEPUNCH_ADAPTATIONS.md` for full analysis.
+Internal analysis available in operations documentation.
 
 ---
 
