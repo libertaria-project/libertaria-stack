@@ -1,0 +1,322 @@
+/* Libertaria Dark Theme - Black/Gold/Red */
+
+[data-md-color-scheme="libertaria-dark"] {
+  /* Primary Colors */
+  --md-primary-fg-color: #0a0a0a;
+  --md-primary-fg-color--light: #1a1a1a;
+  --md-primary-fg-color--dark: #000000;
+  --md-primary-bg-color: #ffd700;
+  --md-primary-bg-color--light: #ffec8b;
+  
+  /* Accent Colors */
+  --md-accent-fg-color: #ff1a1a;
+  --md-accent-fg-color--transparent: rgba(255, 26, 26, 0.1);
+  --md-accent-bg-color: #ffd700;
+  --md-accent-bg-color--light: #ffec8b;
+  
+  /* Default Colors (for text/background) */
+  --md-default-fg-color: #e0e0e0;
+  --md-default-fg-color--light: #888888;
+  --md-default-fg-color--lighter: #666666;
+  --md-default-fg-color--lightest: #444444;
+  --md-default-bg-color: #0a0a0a;
+  --md-default-bg-color--light: #111111;
+  --md-default-bg-color--lighter: #1a1a1a;
+  --md-default-bg-color--lightest: #222222;
+  
+  /* Code Colors */
+  --md-code-fg-color: #ffd700;
+  --md-code-bg-color: #111111;
+  
+  /* Typeset Colors */
+  --md-typeset-color: #e0e0e0;
+  --md-typeset-a-color: #ff1a1a;
+  
+  /* Shadow */
+  --md-shadow-z1: 0 2px 8px rgba(255, 26, 26, 0.1);
+  --md-shadow-z2: 0 4px 16px rgba(255, 26, 26, 0.15);
+  --md-shadow-z3: 0 8px 32px rgba(255, 26, 26, 0.2);
+}
+
+/* Header Styling */
+[data-md-color-scheme="libertaria-dark"] .md-header {
+  background: linear-gradient(180deg, #0a0a0a 0%, #111111 100%);
+  border-bottom: 1px solid rgba(255, 215, 0, 0.2);
+  box-shadow: 0 2px 20px rgba(255, 26, 26, 0.1);
+}
+
+[data-md-color-scheme="libertaria-dark"] .md-header__title {
+  color: #ffd700;
+  font-weight: 700;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+}
+
+/* Navigation */
+[data-md-color-scheme="libertaria-dark"] .md-nav {
+  color: #e0e0e0;
+}
+
+[data-md-color-scheme="libertaria-dark"] .md-nav__link:hover,
+[data-md-color-scheme="libertaria-dark"] .md-nav__link--active {
+  color: #ff1a1a;
+  text-shadow: 0 0 8px rgba(255, 26, 26, 0.6);
+}
+
+[data-md-color-scheme="libertaria-dark"] .md-nav__link--active {
+  font-weight: 600;
+}
+
+/* Links */
+[data-md-color-scheme="libertaria-dark"] .md-typeset a {
+  color: #ff1a1a;
+  text-shadow: 0 0 8px rgba(255, 26, 26, 0.4);
+  transition: all 0.3s ease;
+}
+
+[data-md-color-scheme="libertaria-dark"] .md-typeset a:hover {
+  color: #ff0040;
+  text-shadow: 0 0 15px rgba(255, 0, 64, 0.8);
+}
+
+/* Headings */
+[data-md-color-scheme="libertaria-dark"] .md-typeset h1 {
+  color: #ffd700;
+  font-weight: 700;
+  text-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+  border-bottom: 2px solid rgba(255, 215, 0, 0.3);
+  padding-bottom: 0.5rem;
+}
+
+[data-md-color-scheme="libertaria-dark"] .md-typeset h2 {
+  color: #ffec8b;
+  font-weight: 600;
+}
+
+[data-md-color-scheme="libertaria-dark"] .md-typeset h3 {
+  color: #e0e0e0;
+  font-weight: 600;
+}
+
+/* Code Blocks */
+[data-md-color-scheme="libertaria-dark"] .md-typeset code {
+  background-color: #111111;
+  color: #ffd700;
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  border-radius: 4px;
+  padding: 0.2em 0.4em;
+}
+
+[data-md-color-scheme="libertaria-dark"] .md-typeset pre {
+  background-color: #0d0d0d;
+  border: 1px solid rgba(255, 215, 0, 0.15);
+  border-radius: 8px;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+[data-md-color-scheme="libertaria-dark"] .md-typeset pre code {
+  background-color: transparent;
+  border: none;
+}
+
+/* Admonitions */
+[data-md-color-scheme="libertaria-dark"] .md-typeset .admonition {
+  background-color: #111111;
+  border-left: 4px solid #ffd700;
+  border-radius: 0 8px 8px 0;
+}
+
+[data-md-color-scheme="libertaria-dark"] .md-typeset .admonition.note {
+  border-left-color: #ff1a1a;
+}
+
+[data-md-color-scheme="libertaria-dark"] .md-typeset .admonition-title {
+  background-color: rgba(255, 215, 0, 0.1);
+  color: #ffd700;
+}
+
+[data-md-color-scheme="libertaria-dark"] .md-typeset .admonition.note .admonition-title {
+  background-color: rgba(255, 26, 26, 0.1);
+  color: #ff1a1a;
+}
+
+/* Tables */
+[data-md-color-scheme="libertaria-dark"] .md-typeset table {
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+[data-md-color-scheme="libertaria-dark"] .md-typeset table th {
+  background-color: #1a1a1a;
+  color: #ffd700;
+  border-bottom: 2px solid rgba(255, 215, 0, 0.3);
+}
+
+[data-md-color-scheme="libertaria-dark"] .md-typeset table td {
+  border-bottom: 1px solid rgba(255, 215, 0, 0.1);
+}
+
+[data-md-color-scheme="libertaria-dark"] .md-typeset table tr:hover {
+  background-color: rgba(255, 26, 26, 0.05);
+}
+
+/* Search */
+[data-md-color-scheme="libertaria-dark"] .md-search__input {
+  background-color: #1a1a1a;
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  color: #e0e0e0;
+}
+
+[data-md-color-scheme="libertaria-dark"] .md-search__input:focus {
+  border-color: #ff1a1a;
+  box-shadow: 0 0 10px rgba(255, 26, 26, 0.3);
+}
+
+/* Tabs */
+[data-md-color-scheme="libertaria-dark"] .md-tabs {
+  background-color: #0a0a0a;
+  border-bottom: 1px solid rgba(255, 215, 0, 0.2);
+}
+
+[data-md-color-scheme="libertaria-dark"] .md-tabs__link {
+  color: #888888;
+  transition: all 0.3s ease;
+}
+
+[data-md-color-scheme="libertaria-dark"] .md-tabs__link:hover,
+[data-md-color-scheme="libertaria-dark"] .md-tabs__link--active {
+  color: #ffd700;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+/* Footer */
+[data-md-color-scheme="libertaria-dark"] .md-footer {
+  background-color: #0a0a0a;
+  border-top: 1px solid rgba(255, 215, 0, 0.2);
+}
+
+[data-md-color-scheme="libertaria-dark"] .md-footer-meta {
+  background-color: #000000;
+}
+
+/* Sidebar */
+[data-md-color-scheme="libertaria-dark"] .md-sidebar {
+  background-color: #0a0a0a;
+}
+
+[data-md-color-scheme="libertaria-dark"] .md-sidebar__scrollwrap {
+  background: linear-gradient(180deg, #0a0a0a 0%, #111111 100%);
+}
+
+/* Scrollbar */
+[data-md-color-scheme="libertaria-dark"] ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+[data-md-color-scheme="libertaria-dark"] ::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
+
+[data-md-color-scheme="libertaria-dark"] ::-webkit-scrollbar-thumb {
+  background: #333333;
+  border-radius: 4px;
+}
+
+[data-md-color-scheme="libertaria-dark"] ::-webkit-scrollbar-thumb:hover {
+  background: #ff1a1a;
+}
+
+/* Selection */
+[data-md-color-scheme="libertaria-dark"] ::selection {
+  background-color: rgba(255, 26, 26, 0.3);
+  color: #ffffff;
+}
+
+/* Custom Libertaria Hero Section */
+.libertaria-hero {
+  text-align: center;
+  padding: 3rem 1rem;
+  background: linear-gradient(180deg, #0a0a0a 0%, #111111 100%);
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  border-radius: 12px;
+  margin: 2rem 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.libertaria-hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #ffd700, #ff1a1a, #ffd700, transparent);
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+}
+
+.libertaria-hero h1 {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: #ffd700 !important;
+  text-shadow: 0 0 30px rgba(255, 215, 0, 0.5) !important;
+  margin-bottom: 1rem;
+}
+
+.libertaria-hero p {
+  font-size: 1.25rem;
+  color: #888888;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+/* Gold Accent Button */
+.libertaria-btn {
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #ffd700 0%, #b8860b 100%);
+  color: #0a0a0a !important;
+  font-weight: 700;
+  text-decoration: none;
+  border-radius: 6px;
+  box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
+  transition: all 0.3s ease;
+}
+
+.libertaria-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 25px rgba(255, 215, 0, 0.5);
+  text-shadow: none !important;
+}
+
+/* Red Glow Accent */
+.libertaria-glow {
+  text-shadow: 0 0 10px rgba(255, 26, 26, 0.6);
+}
+
+/* Custom Blockquote */
+[data-md-color-scheme="libertaria-dark"] .md-typeset blockquote {
+  border-left: 4px solid #ff1a1a;
+  background-color: rgba(255, 26, 26, 0.05);
+  padding: 1rem 1.5rem;
+  border-radius: 0 8px 8px 0;
+  font-style: italic;
+}
+
+/* Keyboard Keys */
+[data-md-color-scheme="libertaria-dark"] .md-typeset kbd {
+  background-color: #1a1a1a;
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  border-bottom-color: rgba(255, 215, 0, 0.5);
+  color: #ffd700;
+  box-shadow: 0 2px 0 rgba(255, 215, 0, 0.2);
+}
+
+/* Horizontal Rule */
+[data-md-color-scheme="libertaria-dark"] .md-typeset hr {
+  border: none;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 215, 0, 0.3), transparent);
+  margin: 2rem 0;
+}

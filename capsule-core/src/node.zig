@@ -6,6 +6,7 @@ const config_mod = @import("config.zig");
 const l0_transport = @import("l0_transport");
 const l1_identity = @import("l1_identity");
 const l2_membrane = @import("l2_membrane");
+const utcp_mod = @import("utcp");
 
 const discovery_mod = @import("discovery.zig");
 const peer_table_mod = @import("peer_table.zig");
@@ -17,7 +18,7 @@ const circuit_mod = @import("circuit.zig");
 const relay_service_mod = @import("relay_service.zig");
 
 const NodeConfig = config_mod.NodeConfig;
-const UTCP = l0_transport.utcp.UTCP;
+const UTCP = utcp_mod.UTCP;
 const SoulKey = l1_identity.soulkey.SoulKey;
 const RiskGraph = l1_identity.qvl.types.RiskGraph;
 const DhtService = l0_transport.dht.DhtService;

@@ -8,7 +8,7 @@ pub const qvl_ffi = @import("qvl_ffi.zig");
 pub const entropy = @import("entropy.zig");
 pub const crypto = @import("crypto.zig");
 pub const argon2 = @import("argon2.zig");
-pub const pqxdh = @import("pqxdh.zig");
+// pqxdh is imported as module, not re-exported here (access via @import("pqxdh"))
 pub const prekey = @import("prekey.zig");
 pub const slash = @import("slash.zig");
 pub const trust_graph = @import("trust_graph.zig");

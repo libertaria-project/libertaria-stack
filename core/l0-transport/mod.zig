@@ -6,21 +6,28 @@
 
 const std = @import("std");
 
-// LWF types are available directly via the lwf module import
-// (mod.zig IS the lwf module root in build.zig)
+// LWF types - re-exported directly AND under lwf namespace for compatibility
 pub const LWFHeader = @import("lwf.zig").LWFHeader;
 pub const LWFTrailer = @import("lwf.zig").LWFTrailer;
 pub const LWFFrame = @import("lwf.zig").LWFFrame;
 pub const LWFFlags = @import("lwf.zig").LWFFlags;
 pub const FrameClass = @import("lwf.zig").FrameClass;
 
-// Re-export Time primitives
-pub const time = @import("time.zig");
+// LWF namespace for backward compatibility
+pub const lwf = struct {
+    pub const LWFHeader = @import("lwf.zig").LWFHeader;
+    pub const LWFTrailer = @import("lwf.zig").LWFTrailer;
+    pub const LWFFrame = @import("lwf.zig").LWFFrame;
+    pub const LWFFlags = @import("lwf.zig").LWFFlags;
+    pub const FrameClass = @import("lwf.zig").FrameClass;
+};
 
-// Note: UTCP is available as a separate module, not re-exported here
-// to avoid circular module dependencies (utcp needs lwf as module import)
+// Note: time is imported as a standalone module, not re-exported here
+// to avoid module ownership conflicts
 
-// Note: opq/service/utcp tested separately via their own modules
+// Note: utcp is a separate module, not re-exported here
+
+// Note: opq/service tested separately via their own modules
 // (avoiding circular module dependencies)
 
 // Re-export Transport Skins (DPI evasion)
@@ -48,9 +55,8 @@ pub const relay = @import("relay.zig");
 pub const quarantine = @import("quarantine.zig");
 
 test {
-    // Test individual components that don't have circular import issues
+    // Test individual components
     // Note: opq/service/utcp tested separately via their own modules
-    _ = time;
     _ = skins;
     _ = mimic_https;
     _ = mimic_dns;

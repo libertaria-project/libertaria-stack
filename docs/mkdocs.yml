@@ -3,10 +3,11 @@ docs_dir: src
 site_dir: site
 theme:
   name: material
+  custom_dir: overrides
   palette:
-    - scheme: slate
-      primary: deep purple
-      accent: amber
+    - scheme: libertaria-dark
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
@@ -25,6 +26,9 @@ theme:
     - search.highlight
     - content.code.copy
     - content.code.annotate
+
+extra_css:
+  - stylesheets/libertaria.css
 
 extra:
   social:
