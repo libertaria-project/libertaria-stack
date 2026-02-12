@@ -1,0 +1,15 @@
+[Unit]
+Description=Syncthing Event Listener for Janus
+After=syncthing.service
+Wants=syncthing.service
+
+[Service]
+Type=simple
+ExecStart=/bin/bash /home/markus/.openclaw/workspace/tools/syncthing-event-listener.sh
+Restart=always
+RestartSec=10
+StandardOutput=append:/tmp/janus-syncthing-events.log
+StandardError=append:/tmp/janus-syncthing-events.log
+
+[Install]
+WantedBy=default.target
